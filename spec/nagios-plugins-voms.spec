@@ -26,17 +26,20 @@ This package provides the Nagios probes for the VOMS Admin service.
 
 %build
 
-
 %install
-
 rm -rf $RPM_BUILD_ROOT
-make install DESTDIR=$RPM_BUILD_ROOT
+mkdir -p $RPM_BUILD_ROOT
+install -m 644 src/voms-admin-probe $RPM_BUILD_ROOT%{_libexecdir}/grid-monitoring/probes/%{name}
+install -m 644 README.md $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root,-)
+
+%{_libexecdir}/grid-monitoring/probes/%{name}
+%{_docdir}/%{name}-%{version}
 
 %changelog
 
