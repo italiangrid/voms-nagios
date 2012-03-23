@@ -22,9 +22,10 @@ authorization purposes.
 This package provides the Nagios probes for the VOMS Admin service.
 
 %prep
-%setup -q
+%setup -c
 
 %build
+
 
 %install
 
