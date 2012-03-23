@@ -1,0 +1,182 @@
+#!/usr/bin/env python
+#############################################################################
+# Copyright (c) Italian Grid Initiative 2011.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors:
+#     Andrea Ceccanti - andrea.ceccanti@cnaf.infn.it
+#############################################################################
+'''
+Created on 14/nov/2011
+
+@author: andreaceccanti
+'''
+
+from optparse import OptionParser, OptionGroup
+
+from string import Template
+from sys import stderr, exit
+import signal
+import urllib2
+import httplib
+import socket
+import xml.dom.minidom
+from urllib2 import HTTPError, URLError
+ 
+__version__ = "1.0"
+
+OK       = 0
+WARNING  = 1
+CRITICAL = 2
+UNKNOWN  = 3
+
+contact_string_template = "https://${hostname}:${port}/voms/${vo}/services/VOMSAdmin?method=getVOName"
+
+def nagios_exit(exit_code, msg):
+    print msg
+    exit(exit_code)
+
+def nagios_ok(msg):
+    nagios_exit(OK, msg)
+
+def nagios_warning(msg):
+    nagios_exit(WARNING, msg)
+
+def nagios_critical(msg):
+    nagios_exit(CRITICAL, msg)
+
+def nagios_unknown(msg):
+    nagios_exit(UNKNOWN, msg)
+
+class HTTPSClientAuthHandler(urllib2.HTTPSHandler):
+    
+    def __init__(self, key, cert):
+        urllib2.HTTPSHandler.__init__(self)
+        self.key = key
+        self.cert = cert
+        
+        
+    def https_open(self, req):
+        return self.do_open(self.getConnection, req)
+    
+    def getConnection(self, host):
+        return httplib.HTTPSConnection(host, key_file=self.key, cert_file=self.cert)
+    
+
+def sig_handler(signum, frame):
+    if signum == signal.SIGALRM:
+        nagios_unknown("Received timeout while fetching results.")
+    elif signum == signal.SIGTERM:
+        nagios_unknown("SIGTERM received.")
+
+def setup_option_parser():
+    parser = OptionParser(version="voms-admin-probe v. %s" % __version__)
+    
+    parser.add_option("-H",
+                      "--hostname",
+                      dest="hostname",
+                      help="The host where VOMS Admin is running.",
+                      default="localhost")
+    
+    parser.add_option("-p",
+                      "--port",
+                      dest="port",
+                      help="The port where VOMS Admin is listening.",
+                      default="8443")
+    
+    parser.add_option("--vo",
+                      dest="vo",
+                      help="The VO that must be queried.")
+    
+    ssl_options = OptionGroup(parser,"SSL authentication options", "These options set the certificate used to authenticate with VOMS Admin and the local path where trust anchors can be found.")
+    
+    ssl_options.add_option("--cert",
+                           dest="cert",
+                           help="The SSL client certificate.",
+                           default="/etc/grid-security/hostcert.pem")
+    
+    ssl_options.add_option("--key",
+                           dest="key",
+                           help="The private key.",
+                           default="/etc/grid-security/hostkey.pem")
+    
+    ssl_options.add_option("--capath", 
+                           dest="capath", 
+                           help="The directory where trust anchors are stored on the system.",
+                           default="/etc/grid-security/certificates")
+    
+    parser.add_option_group(ssl_options)
+    
+    return parser
+
+
+def main():
+    
+    ## Setup signal handlers
+    signal.signal(signal.SIGALRM, sig_handler)
+    signal.signal(signal.SIGTERM, sig_handler)
+    
+    parser = setup_option_parser()
+    (options, args) = parser.parse_args()
+    
+    if not options.vo:
+        nagios_unknown("Please specify a VO using the --vo option")
+        
+    optdict = {'hostname':options.hostname,
+               'port': options.port,
+               'vo':options.vo}
+    
+    contact_string = Template(contact_string_template).safe_substitute(optdict)
+    
+    cert_handler = HTTPSClientAuthHandler(key=options.key, 
+                                          cert=options.cert) 
+    
+    opener = urllib2.build_opener(cert_handler)
+    urllib2.install_opener(opener)
+    
+    try:
+        f = urllib2.urlopen(contact_string)
+    
+    except HTTPError, e:
+        nagios_critical("The server could not fulfill the request for vo %s. %s" % (options.vo, e))
+    
+    except URLError, e:
+        nagios_critical("Error contacting remote server: %s:%s. Error: %s." % (options.hostname, options.port, e.reason))
+        
+    xml_doc = f.read()
+    doc = xml.dom.minidom.parseString(xml_doc)
+    ret_val = doc.getElementsByTagName("getVONameReturn") 
+    
+    if ret_val is None:
+        nagios_critical("Unexpected response\n.Response:%s" % xml_doc)
+        
+    else:
+        def get_text(nodelist):
+            text = ""
+            for node in nodelist:
+                if node.nodeType == node.TEXT_NODE:
+                    text = text + node.data
+            return text
+        
+        ## Extract VO name
+        vo_name = get_text(ret_val[0].childNodes).strip()
+        
+        if options.vo == vo_name[1:]:
+            nagios_ok("VOMS Admin for VO %s up and running." % vo_name[1:])
+        else:
+            nagios_warning("VO name do not match arguments: %s",vo_name[1:])
+
+
+if __name__ == '__main__':
+    main()
