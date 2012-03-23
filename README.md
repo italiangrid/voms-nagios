@@ -43,3 +43,4 @@ the following URLs
 
    * GGUS (official support channel): http://www.ggus.eu
    * VOMS Product Team list: voms-product-team@lists.cnaf.infn.it
+   * VOMS nagios probe source: https://github.com/andreaceccanti/voms-nagios
