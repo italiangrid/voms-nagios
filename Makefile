@@ -14,7 +14,7 @@ rpm:
 					$(rpmbuild_dir)/SOURCES $(rpmbuild_dir)/SPECS \
 					$(rpmbuild_dir)/SRPMS
 
-		tar -cvzf $(rpmbuild_dir)/SOURCES/$(name)-$(version).tar.gz Makefile src/* spec/*
+		tar -cvzf $(rpmbuild_dir)/SOURCES/$(name)-$(version).tar.gz Makefile src/* spec/* README.md
 		rpmbuild --nodeps -v -ba $(spec) --define "_topdir $(rpmbuild_dir)" 
 
 etics:	dist rpm
