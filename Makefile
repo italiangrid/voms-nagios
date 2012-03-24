@@ -17,7 +17,7 @@ rpm:
 		tar -cvzf $(rpmbuild_dir)/SOURCES/$(name)-$(version).tar.gz Makefile src/* spec/* README.md
 		rpmbuild --nodeps -v -ba $(spec) --define "_topdir $(rpmbuild_dir)" 
 
-etics:	dist rpm
+etics:	rpm
 		mkdir -p tgz RPMS
 		cp target/*.tar.gz tgz
 		cp -r $(rpmbuild_dir)/RPMS/* $(rpmbuild_dir)/SRPMS/* RPMS
